@@ -1,9 +1,9 @@
-use clap::Clap;
+use clap::Parser;
 use sha2::{Digest, Sha256};
 use std::io::{BufRead, BufReader, Write};
 use std::process::{Command, Stdio};
 
-#[derive(Clap)]
+#[derive(Parser)]
 struct Opts {
     #[clap(long)]
     salt: String,

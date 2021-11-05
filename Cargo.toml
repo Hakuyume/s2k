@@ -8,5 +8,5 @@ edition = "2018"
 
 [dependencies]
 base64 = "0.13"
-clap = "3.0.0-beta.2"
+clap = "3.0.0-beta.5"
 sha2 = "0.9"
