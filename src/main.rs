@@ -16,13 +16,17 @@ fn main() {
 
     let pin = pinentry(opts.pinentry.as_ref());
 
-    let key = (0..65536).fold(pin.into_bytes(), |key, _| {
+    let key = s2k(opts.salt.as_bytes(), pin.clone().into_bytes());
+    println!("{}", base64::encode(key));
+}
+
+fn s2k(salt: &[u8], pin: Vec<u8>) -> Vec<u8> {
+    (0..65536).fold(pin, |key, _| {
         let mut hasher = Sha256::new();
-        hasher.update(opts.salt.as_bytes());
+        hasher.update(salt);
         hasher.update(key);
         hasher.finalize().as_slice().to_owned()
-    });
-    println!("{}", base64::encode(key));
+    })
 }
 
 fn pinentry<P>(pinentry: Option<P>) -> String
