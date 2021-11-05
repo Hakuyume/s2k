@@ -7,12 +7,14 @@ use std::process::{Command, Stdio};
 struct Opts {
     #[clap(long)]
     salt: String,
+    #[clap(long)]
+    pinentry: Option<String>,
 }
 
 fn main() {
     let opts = Opts::parse();
 
-    let pin = pinentry();
+    let pin = pinentry(opts.pinentry.as_ref());
 
     let key = (0..65536).fold(pin.into_bytes(), |key, _| {
         let mut hasher = Sha256::new();
@@ -23,8 +25,11 @@ fn main() {
     println!("{}", base64::encode(key));
 }
 
-fn pinentry() -> String {
-    let mut child = Command::new("pinentry")
+fn pinentry<P>(pinentry: Option<P>) -> String
+where
+    P: AsRef<str>,
+{
+    let mut child = Command::new(pinentry.as_ref().map_or("pinentry", AsRef::as_ref))
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .spawn()
