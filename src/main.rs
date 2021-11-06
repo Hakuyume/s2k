@@ -1,6 +1,7 @@
 use clap::Parser;
 use serde::Deserialize;
 use sha2::{Digest, Sha256};
+use std::ffi::OsStr;
 use std::fs::File;
 use std::io::{BufRead, BufReader, Read, Write};
 use std::process::{Command, Stdio};
@@ -50,9 +51,9 @@ fn s2k(salt: &[u8], pin: Vec<u8>) -> Vec<u8> {
 
 fn pinentry<P>(pinentry: Option<P>) -> String
 where
-    P: AsRef<str>,
+    P: AsRef<OsStr>,
 {
-    let mut child = Command::new(pinentry.as_ref().map_or("pinentry", AsRef::as_ref))
+    let mut child = Command::new(pinentry.as_ref().map_or("pinentry".as_ref(), AsRef::as_ref))
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .spawn()
