@@ -1,20 +1,39 @@
 use clap::Parser;
+use serde::Deserialize;
 use sha2::{Digest, Sha256};
-use std::io::{BufRead, BufReader, Write};
+use std::fs::File;
+use std::io::{BufRead, BufReader, Read, Write};
 use std::process::{Command, Stdio};
 
 #[derive(Parser)]
 struct Opts {
     #[clap(long)]
     salt: String,
-    #[clap(long)]
+}
+
+#[derive(Default, Deserialize)]
+struct Config {
     pinentry: Option<String>,
 }
 
 fn main() {
     let opts = Opts::parse();
 
-    let pin = pinentry(opts.pinentry.as_ref());
+    let config = if let Some(config_file) = dirs::config_dir()
+        .map(|config_dir| config_dir.join("s2k.toml"))
+        .filter(|config_file| config_file.exists())
+    {
+        let mut buf = Vec::new();
+        File::open(&config_file)
+            .unwrap()
+            .read_to_end(&mut buf)
+            .unwrap();
+        toml::from_slice(&buf).unwrap()
+    } else {
+        Config::default()
+    };
+
+    let pin = pinentry(config.pinentry.as_ref());
 
     let key = s2k(opts.salt.as_bytes(), pin.clone().into_bytes());
     println!("{}", base64::encode(key));
@@ -53,8 +72,7 @@ where
     writeln!(&mut stdin, "BYE").unwrap();
     stdin.flush().unwrap();
 
-    let status = child.wait().unwrap();
-    assert!(status.success());
+    child.wait().unwrap();
 
     pin
 }
