@@ -1,6 +1,6 @@
 use clap::Parser;
 use serde::Deserialize;
-use sha2::{Digest, Sha256};
+use sha2::{digest, Sha256};
 use std::ffi::OsStr;
 use std::fs::File;
 use std::io::{BufRead, BufReader, Read, Write};
@@ -10,6 +10,8 @@ use std::process::{Command, Stdio};
 struct Opts {
     #[clap(long)]
     salt: String,
+    #[clap(default_value = "65536", long)]
+    count: usize,
 }
 
 #[derive(Default, Deserialize)]
@@ -21,6 +23,7 @@ struct Config {
 #[derive(Default, Deserialize)]
 struct VerifyConfig {
     salt: String,
+    count: usize,
     key: String,
 }
 
@@ -44,21 +47,16 @@ fn main() {
     let passphrase = pinentry(config.pinentry.as_ref());
 
     if let Some(verify_config) = &config.verify {
-        let key = s2k(verify_config.salt.as_bytes(), passphrase.as_bytes());
+        let key = s2k::<Sha256>(
+            verify_config.salt.as_bytes(),
+            passphrase.as_bytes(),
+            verify_config.count,
+        );
         assert_eq!(base64::encode(key), verify_config.key);
     }
 
-    let key = s2k(opts.salt.as_bytes(), passphrase.as_bytes());
+    let key = s2k::<Sha256>(opts.salt.as_bytes(), passphrase.as_bytes(), opts.count);
     println!("{}", base64::encode(key));
-}
-
-fn s2k(salt: &[u8], pin: &[u8]) -> Vec<u8> {
-    (0..65536).fold(pin.to_owned(), |key, _| {
-        let mut hasher = Sha256::new();
-        hasher.update(salt);
-        hasher.update(key);
-        hasher.finalize().as_slice().to_owned()
-    })
 }
 
 fn pinentry<P>(pinentry: Option<P>) -> String
@@ -88,4 +86,31 @@ where
     child.wait().unwrap();
 
     pin
+}
+
+fn s2k<D>(salt: &[u8], passphrase: &[u8], count: usize) -> digest::Output<D>
+where
+    D: digest::Digest,
+{
+    let mut hasher = D::new();
+    for &b in salt.iter().chain(passphrase).cycle().take(count) {
+        hasher.update(&[b]);
+    }
+    hasher.finalize()
+}
+
+#[cfg(test)]
+mod tests {
+    use hex_literal::hex;
+    use sha2::Sha256;
+
+    #[test]
+    fn test_s2k() {
+        // gpg --cipher-algo AES256 --s2k-count 65536 --s2k-digest SHA256 --s2k-mode 3 --symmetric <FILE>
+        // gpg --list-packets --show-session-key <FILE>.gpg
+        assert_eq!(
+            super::s2k::<Sha256>(&hex!("3109800B39D9C9D6"), b"passphrase", 65536).as_slice(),
+            &hex!("4892EE6C021A36201DE80C625C7F2B654C3AAC4578308F03A22B67BF25E893F6"),
+        );
+    }
 }

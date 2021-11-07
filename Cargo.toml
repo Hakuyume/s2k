@@ -13,3 +13,6 @@ dirs = "4.0"
 serde = { version = "1", features = ["derive"] }
 sha2 = "0.9"
 toml = "0.5"
+
+[dev-dependencies]
+hex-literal = "0.3"
