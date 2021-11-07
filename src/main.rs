@@ -15,6 +15,13 @@ struct Opts {
 #[derive(Default, Deserialize)]
 struct Config {
     pinentry: Option<String>,
+    verify: Option<VerifyConfig>,
+}
+
+#[derive(Default, Deserialize)]
+struct VerifyConfig {
+    salt: String,
+    key: String,
 }
 
 fn main() {
@@ -34,14 +41,19 @@ fn main() {
         Config::default()
     };
 
-    let pin = pinentry(config.pinentry.as_ref());
+    let passphrase = pinentry(config.pinentry.as_ref());
 
-    let key = s2k(opts.salt.as_bytes(), pin.clone().into_bytes());
+    if let Some(verify_config) = &config.verify {
+        let key = s2k(verify_config.salt.as_bytes(), passphrase.as_bytes());
+        assert_eq!(base64::encode(key), verify_config.key);
+    }
+
+    let key = s2k(opts.salt.as_bytes(), passphrase.as_bytes());
     println!("{}", base64::encode(key));
 }
 
-fn s2k(salt: &[u8], pin: Vec<u8>) -> Vec<u8> {
-    (0..65536).fold(pin, |key, _| {
+fn s2k(salt: &[u8], pin: &[u8]) -> Vec<u8> {
+    (0..65536).fold(pin.to_owned(), |key, _| {
         let mut hasher = Sha256::new();
         hasher.update(salt);
         hasher.update(key);
