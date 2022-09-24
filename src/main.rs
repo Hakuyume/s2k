@@ -110,7 +110,7 @@ mod tests {
         // gpg --list-packets --show-session-key <FILE>.gpg
         assert_eq!(
             super::s2k::<Sha256>(&hex!("3109800B39D9C9D6"), b"passphrase", 65536).as_slice(),
-            &hex!("4892EE6C021A36201DE80C625C7F2B654C3AAC4578308F03A22B67BF25E893F6"),
+            hex!("4892EE6C021A36201DE80C625C7F2B654C3AAC4578308F03A22B67BF25E893F6"),
         );
     }
 }
