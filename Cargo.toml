@@ -7,12 +7,16 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+anyhow = "1"
+argon2 = { version = "0.5", features = ["std"] }
 base64 = "0.13"
-clap = { version = "3", features = ["derive"] }
-dirs = "4"
-serde = { version = "1", features = ["derive"] }
+# https://docs.rs/getrandom/0.2.11/getrandom/index.html#webassembly-support
+getrandom = { version = "0.2", features = ["js"] }
+strum = { version = "0.25", features = ["derive"] }
 sha2 = "0.10"
-toml = "0.5"
+wasm-bindgen-futures = "0.4"
+web-sys = { version = "0.3", features = ["Clipboard", "HtmlSelectElement", "Navigator"] }
+yew = { version = "0.21", features = ["csr"] }
 
 [dev-dependencies]
 hex-literal = "0.3"
