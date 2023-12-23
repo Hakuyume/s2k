@@ -44,7 +44,7 @@ jobs:
       - run: |
           rustup target add wasm32-unknown-unknown
           curl -L https://github.com/trunk-rs/trunk/releases/download/v0.18.3/trunk-x86_64-unknown-linux-gnu.tar.gz | tar -xzf -
-          ./trunk build --release
+          ./trunk build --public-url /s2k/ --release
       - uses: actions/upload-pages-artifact@v3
         with:
           path: dist/
