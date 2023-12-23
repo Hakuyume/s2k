@@ -49,7 +49,7 @@ jobs:
         with:
           path: dist/
   deploy-pages:
-    # if: ${{ github.ref == 'refs/heads/main' }}
+    if: ${{ github.ref == 'refs/heads/main' }}
     needs: trunk-build
     permissions:
       pages: write
