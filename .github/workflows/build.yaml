@@ -1,0 +1,47 @@
+name: build
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+    branches: ["main"]
+
+jobs:
+  cargo-fmt:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - run: cargo fmt -- --check
+  cargo-clippy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      # https://github.com/actions/cache/blob/master/examples.md#rust---cargo
+      - uses: actions/cache@v3
+        with:
+          path: |
+            ~/.cargo/bin/
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            target/
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+      - run: cargo clippy -- --deny warnings
+  trunk-build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      # https://github.com/actions/cache/blob/master/examples.md#rust---cargo
+      - uses: actions/cache@v3
+        with:
+          path: |
+            ~/.cargo/bin/
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            target/
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+      - run: |
+          rustup target add wasm32-unknown-unknown
+          cargo install --locked trunk
+          trunk build --release
