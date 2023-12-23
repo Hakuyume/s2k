@@ -11,10 +11,10 @@ fn main() {
 }
 
 enum Message {
-    ChangePassword(String),
-    ChangeHashExpected(Option<PasswordHashString>),
-    ChangeAlgorithm(Algorithm),
-    ChangeSalt(String),
+    Password(String),
+    HashExpected(Option<PasswordHashString>),
+    Algorithm(Algorithm),
+    Salt(String),
 }
 
 #[derive(
@@ -69,21 +69,21 @@ impl yew::Component for App {
 
     fn update(&mut self, _: &yew::Context<Self>, msg: Self::Message) -> bool {
         match msg {
-            Message::ChangePassword(value) => {
+            Message::Password(value) => {
                 self.password = value;
                 self.update_password_validation();
                 self.update_hash_actual();
                 self.update_key();
             }
-            Message::ChangeHashExpected(value) => {
+            Message::HashExpected(value) => {
                 self.hash_expected = value;
                 self.update_password_validation();
             }
-            Message::ChangeAlgorithm(value) => {
+            Message::Algorithm(value) => {
                 self.algorithm = value;
                 self.update_key();
             }
-            Message::ChangeSalt(value) => {
+            Message::Salt(value) => {
                 self.salt = value;
                 self.update_key();
             }
@@ -95,13 +95,13 @@ impl yew::Component for App {
         yew::html! {
             <main class="card">
             <section class="card-body">
-            <PasswordInput onchange={ctx.link().callback(Message::ChangePassword)} validation={self.password_validation.clone()} />
+            <PasswordInput onchange={ctx.link().callback(Message::Password)} validation={self.password_validation.clone()} />
             <HashActualOutput value={self.hash_actual.clone()} />
-            <HashExpectedInput onchange={ctx.link().callback(Message::ChangeHashExpected)} />
+            <HashExpectedInput onchange={ctx.link().callback(Message::HashExpected)} />
             </section>
             <section class="card-body">
-            <AlgorithmInput onchange={ctx.link().callback(Message::ChangeAlgorithm)} />
-            <SaltInput onchange={ctx.link().callback(Message::ChangeSalt)} validation={self.salt_validation.clone()} />
+            <AlgorithmInput onchange={ctx.link().callback(Message::Algorithm)} />
+            <SaltInput onchange={ctx.link().callback(Message::Salt)} validation={self.salt_validation.clone()} />
             <KeyOutput value={self.key.clone()} />
             </section>
             </main>
@@ -402,7 +402,7 @@ where
 {
     let mut hasher = D::new();
     for &b in salt.iter().chain(passphrase).cycle().take(count) {
-        hasher.update(&[b]);
+        hasher.update([b]);
     }
     hasher.finalize()
 }
