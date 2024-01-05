@@ -2,6 +2,7 @@ use argon2::password_hash::rand_core::OsRng;
 use argon2::password_hash::{PasswordHashString, SaltString};
 use argon2::{Argon2, PasswordHasher, PasswordVerifier};
 use futures::FutureExt;
+use gloo::storage::{LocalStorage, Storage};
 use sha2::{digest, Sha256};
 use std::time::Duration;
 use strum::{EnumMessage, IntoEnumIterator};
@@ -213,10 +214,21 @@ struct HashActualOutputProps {
 
 #[yew::function_component]
 fn HashActualOutput(props: &HashActualOutputProps) -> yew::Html {
+    let onclick = {
+        let value = props.value.clone();
+        move |_| {
+            let _ = LocalStorage::set("hash", &value);
+        }
+    };
     yew::html! {
         <div class="input-group">
         <label for="hash-actual" class={yew::classes!("input-group-prepend", "input-group-text")}>{"Hash (actual)"}</label>
         <input type="text" id="hash-actual" class={yew::classes!("form-control")} value={props.value.clone()} readonly=true />
+        <div class="input-group-append">
+        <button type="button" class={yew::classes!("btn", "btn-outline-secondary")} onclick={onclick}>
+        <i class="bi bi-file-earmark-arrow-up" />
+        </button>
+        </div>
         </div>
     }
 }
@@ -249,6 +261,25 @@ fn HashExpectedInput(props: &HashExpectedInputProps) -> yew::Html {
             }
         }
     };
+    let onclick = {
+        let setter = value.setter();
+        let validation_setter = validation.setter();
+        let callback = props.onchange.clone();
+        move |_| {
+            let value = LocalStorage::get::<String>("hash").unwrap_or_default();
+            setter.set(value.clone());
+            match PasswordHashString::new(&value) {
+                Ok(v) => {
+                    validation_setter.set(Ok(()));
+                    callback.emit(Some(v));
+                }
+                Err(e) => {
+                    validation_setter.set(Err(e));
+                    callback.emit(None);
+                }
+            }
+        }
+    };
     let class = [
         Some("form-control"),
         match &*validation {
@@ -262,6 +293,11 @@ fn HashExpectedInput(props: &HashExpectedInputProps) -> yew::Html {
         <div class={yew::classes!("input-group", "has-validation")}>
         <label for="hash-expected" class={yew::classes!("input-group-prepend", "input-group-text")}>{"Hash (expected)"}</label>
         <input type="text" id="hash-expected" class={class} value={(*value).clone()} onchange={onchange} />
+        <div class="input-group-append">
+        <button type="button" class={yew::classes!("btn", "btn-outline-secondary")} onclick={onclick}>
+        <i class="bi bi-file-earmark-arrow-down" />
+        </button>
+        </div>
         if let Err(e) = &*validation {
             <div class={yew::classes!("invalid-feedback")}>{e.to_string()}</div>
         }
