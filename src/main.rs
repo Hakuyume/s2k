@@ -10,6 +10,8 @@ use wasm_bindgen_futures::JsFuture;
 use web_sys::{Event, HtmlInputElement, HtmlSelectElement};
 use yew::TargetCast;
 
+const STORAGE_KEY: &str = concat!(env!("CARGO_BIN_NAME"), "/hash");
+
 fn main() {
     yew::Renderer::<App>::new().render();
 }
@@ -217,7 +219,7 @@ fn HashActualOutput(props: &HashActualOutputProps) -> yew::Html {
     let onclick = {
         let value = props.value.clone();
         move |_| {
-            let _ = LocalStorage::set("hash", &value);
+            let _ = LocalStorage::set(STORAGE_KEY, &value);
         }
     };
     yew::html! {
@@ -266,7 +268,7 @@ fn HashExpectedInput(props: &HashExpectedInputProps) -> yew::Html {
         let validation_setter = validation.setter();
         let callback = props.onchange.clone();
         move |_| {
-            let value = LocalStorage::get::<String>("hash").unwrap_or_default();
+            let value = LocalStorage::get::<String>(STORAGE_KEY).unwrap_or_default();
             setter.set(value.clone());
             match PasswordHashString::new(&value) {
                 Ok(v) => {
