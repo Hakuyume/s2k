@@ -1,8 +1,11 @@
 use argon2::password_hash::rand_core::OsRng;
 use argon2::password_hash::{PasswordHashString, SaltString};
 use argon2::{Argon2, PasswordHasher, PasswordVerifier};
+use futures::FutureExt;
 use sha2::{digest, Sha256};
+use std::time::Duration;
 use strum::{EnumMessage, IntoEnumIterator};
+use wasm_bindgen_futures::JsFuture;
 use web_sys::{Event, HtmlInputElement, HtmlSelectElement};
 use yew::TargetCast;
 
@@ -360,15 +363,30 @@ fn KeyOutput(props: &KeyOutputProps) -> yew::Html {
         let visible = visible.clone();
         move |_| visible.set(!*visible)
     };
+    let clipboard =
+        yew::use_state(|| web_sys::window().and_then(|window| window.navigator().clipboard()));
+    let clipboard_state = yew::use_state(|| false);
     let onclick_clipboard = {
+        let clipboard = clipboard.clone();
+        let clipboard_state = clipboard_state.setter();
         let value = props.value.clone();
         move |_| {
-            let clipboard = web_sys::window().unwrap().navigator().clipboard().unwrap();
-            let f =
-                wasm_bindgen_futures::JsFuture::from(clipboard.write_text(value.as_ref().unwrap()));
-            wasm_bindgen_futures::spawn_local(async move {
-                let _ = f.await;
-            });
+            let clipboard = clipboard.clone();
+            let clipboard_state = clipboard_state.clone();
+            let value = value.clone();
+            wasm_bindgen_futures::spawn_local(
+                async move {
+                    let clipboard = clipboard.as_ref()?;
+                    JsFuture::from(clipboard.write_text(value.as_deref().unwrap_or_default()))
+                        .await
+                        .ok()?;
+                    clipboard_state.set(true);
+                    gloo::timers::future::sleep(Duration::from_secs(1)).await;
+                    clipboard_state.set(false);
+                    Some(())
+                }
+                .map(|_| ()),
+            );
         }
     };
     yew::html! {
@@ -388,9 +406,15 @@ fn KeyOutput(props: &KeyOutputProps) -> yew::Html {
             <i class="bi bi-eye-slash" />
         }
         </button>
-        <button type="button" class={yew::classes!("btn", "btn-outline-secondary")} onclick={onclick_clipboard} disabled={props.value.is_none()}>
-        <i class="bi bi-clipboard" />
-        </button>
+        if clipboard.is_some() {
+            <button type="button" class={yew::classes!("btn", "btn-outline-secondary")} onclick={onclick_clipboard} disabled={props.value.is_none()}>
+            if *clipboard_state {
+                <i class="bi bi-clipboard-check" />
+            } else {
+                <i class="bi bi-clipboard" />
+            }
+            </button>
+        }
         </div>
         </div>
     }
