@@ -182,6 +182,14 @@ fn PasswordInput(props: &PasswordInputProps) -> yew::Html {
             callback.emit(value);
         }
     };
+    let onclick = {
+        let setter = value.setter();
+        let callback = props.onchange.clone();
+        move |_| {
+            setter.set(String::new());
+            callback.emit(String::new());
+        }
+    };
     let class_a = [
         Some("input-group"),
         props.validation.as_ref().map(|_| "has-validation"),
@@ -202,6 +210,11 @@ fn PasswordInput(props: &PasswordInputProps) -> yew::Html {
         <div class={class_a}>
         <label for="password" class={yew::classes!("input-group-prepend", "input-group-text")}>{"Password"}</label>
         <input type="password" id="password" class={class_b} value={(*value).clone()} onchange={onchange} />
+        <div class="input-group-append">
+        <button type="button" class={yew::classes!("btn", "btn-outline-secondary")} onclick={onclick}>
+        <i class="bi bi-x-circle" />
+        </button>
+        </div>
         if let Some(Err(e)) = &props.validation {
             <div class={yew::classes!("invalid-feedback")}>{e.to_string()}</div>
         }
