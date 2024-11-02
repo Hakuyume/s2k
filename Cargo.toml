@@ -9,7 +9,7 @@ edition = "2021"
 [dependencies]
 anyhow = "1"
 argon2 = { version = "0.5", features = ["std"] }
-base64 = "0.13"
+base64 = "0.22"
 futures = "0.3"
 # https://docs.rs/getrandom/0.2.11/getrandom/index.html#webassembly-support
 getrandom = { version = "0.2", features = ["js"] }
@@ -21,4 +21,4 @@ web-sys = { version = "0.3", features = ["Clipboard", "HtmlSelectElement", "Navi
 yew = { version = "0.21", features = ["csr"] }
 
 [dev-dependencies]
-hex-literal = "0.3"
+hex-literal = "0.4"

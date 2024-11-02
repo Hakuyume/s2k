@@ -1,6 +1,7 @@
 use argon2::password_hash::rand_core::OsRng;
 use argon2::password_hash::{PasswordHashString, SaltString};
 use argon2::{Argon2, PasswordHasher, PasswordVerifier};
+use base64::prelude::{Engine, BASE64_STANDARD};
 use futures::FutureExt;
 use gloo::storage::{LocalStorage, Storage};
 use sha2::{digest, Sha256};
@@ -142,7 +143,7 @@ impl App {
                     &mut key,
                 ) {
                     Ok(_) => {
-                        self.key = Some(base64::encode(key));
+                        self.key = Some(BASE64_STANDARD.encode(key));
                         self.salt_validation = Ok(());
                     }
                     Err(e @ argon2::Error::SaltTooShort | e @ argon2::Error::SaltTooLong) => {
@@ -153,7 +154,7 @@ impl App {
                 }
             }
             Algorithm::S2kSha256 => {
-                self.key = Some(base64::encode(s2k::<Sha256>(
+                self.key = Some(BASE64_STANDARD.encode(s2k::<Sha256>(
                     self.salt.as_bytes(),
                     self.password.as_bytes(),
                     65536,
@@ -415,7 +416,7 @@ fn KeyOutput(props: &KeyOutputProps) -> yew::Html {
         move |_| visible.set(!*visible)
     };
     let clipboard =
-        yew::use_state(|| web_sys::window().and_then(|window| window.navigator().clipboard()));
+        yew::use_state(|| web_sys::window().map(|window| window.navigator().clipboard()));
     let clipboard_state = yew::use_state(|| false);
     let onclick_clipboard = {
         let clipboard = clipboard.clone();
