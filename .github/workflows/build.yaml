@@ -27,7 +27,7 @@ jobs:
           key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
       - run: |
           rustup target add wasm32-unknown-unknown
-          cargo clippy --locked --target=wasm32-unknown-unknown -- --deny=warnings
+          cargo clippy --locked -- --deny=warnings
   trunk-build:
     runs-on: ubuntu-latest
     steps:
