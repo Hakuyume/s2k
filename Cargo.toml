@@ -10,8 +10,8 @@ edition = "2024"
 argon2 = { version = "0.5.3", features = ["std"] }
 base64 = "0.22.1"
 futures = "0.3.31"
-# https://docs.rs/getrandom/0.3.1/getrandom/index.html#webassembly-support
-getrandom = { version = "0.3.1", features = ["wasm_js"] }
+# https://docs.rs/getrandom/0.2.15/getrandom/index.html#webassembly-support
+getrandom = { version = "0.2.15", features = ["js"] }
 gloo = { version = "0.11.0", default-features = false, features = ["futures", "storage", "timers"] }
 sha2 = "0.10.8"
 strum = { version = "0.27.1", features = ["derive"] }
