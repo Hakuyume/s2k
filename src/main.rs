@@ -1,10 +1,10 @@
 use argon2::password_hash::rand_core::OsRng;
 use argon2::password_hash::{PasswordHashString, SaltString};
 use argon2::{Argon2, PasswordHasher, PasswordVerifier};
-use base64::prelude::{Engine, BASE64_STANDARD};
+use base64::prelude::{BASE64_STANDARD, Engine};
 use futures::FutureExt;
 use gloo::storage::{LocalStorage, Storage};
-use sha2::{digest, Sha256};
+use sha2::{Sha256, digest};
 use std::time::Duration;
 use strum::{EnumMessage, IntoEnumIterator};
 use wasm_bindgen_futures::JsFuture;

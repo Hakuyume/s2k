@@ -25,7 +25,9 @@ jobs:
             ~/.cargo/registry/cache/
             ~/.cargo/git/db/
           key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
-      - run: cargo clippy --locked -- --deny=warnings
+      - run: |
+          rustup target add wasm32-unknown-unknown
+          cargo clippy --locked --target=wasm32-unknown-unknown -- --deny=warnings
   trunk-build:
     runs-on: ubuntu-latest
     steps:
