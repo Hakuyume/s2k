@@ -2,9 +2,17 @@ use base64::prelude::{BASE64_STANDARD, Engine};
 use sha2::{Sha256, digest};
 
 #[derive(
-    Clone, Copy, PartialEq, strum::Display, strum::EnumIter, strum::EnumMessage, strum::EnumString,
+    Clone,
+    Copy,
+    Default,
+    PartialEq,
+    strum::Display,
+    strum::EnumIter,
+    strum::EnumMessage,
+    strum::EnumString,
 )]
 pub(crate) enum Algorithm {
+    #[default]
     #[strum(message = "argon2id (256 bits)")]
     Argon2id256,
     #[strum(message = "argon2id (512 bits)")]

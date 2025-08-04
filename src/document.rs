@@ -35,6 +35,7 @@ pub(crate) fn set_icon(element: &Element, value: &str) -> Result<(), JsValue> {
     Ok(())
 }
 
+#[derive(Clone)]
 pub(crate) struct InputGroup {
     group: HtmlElement,
     input: HtmlInputElement,
