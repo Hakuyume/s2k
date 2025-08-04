@@ -4,7 +4,7 @@ mod web;
 use argon2::password_hash::rand_core::OsRng;
 use argon2::password_hash::{self, PasswordHashString, SaltString};
 use argon2::{Argon2, PasswordHasher, PasswordVerifier};
-use futures::{FutureExt, TryFutureExt};
+use futures::TryFutureExt;
 use std::pin;
 use std::rc::Rc;
 use std::time::Duration;
