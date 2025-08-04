@@ -12,6 +12,8 @@ use web_sys::HtmlElement;
 use web_sys::HtmlInputElement;
 use web_sys::{Clipboard, Document, Storage, Window};
 
+pub(crate) type JsResult<T> = Result<T, JsValue>;
+
 #[derive(Clone)]
 pub(crate) struct Context {
     window: Rc<Window>,
@@ -21,7 +23,7 @@ pub(crate) struct Context {
 }
 
 impl Context {
-    pub(crate) fn new() -> Result<Self, JsValue> {
+    pub(crate) fn new() -> JsResult<Self> {
         let window = web_sys::window().ok_or_else(|| JsValue::from("missing window"))?;
         let clipboard = window.navigator().clipboard();
         let document = window
@@ -46,7 +48,7 @@ impl Context {
         &self.storage
     }
 
-    pub(crate) fn get_element_by_id<T>(&self, element_id: &str) -> Result<Rc<T>, JsValue>
+    pub(crate) fn get_element_by_id<T>(&self, element_id: &str) -> JsResult<Rc<T>>
     where
         T: JsCast,
     {
@@ -64,10 +66,7 @@ impl Context {
             })
     }
 
-    pub(crate) fn sleep(
-        &self,
-        duration: Duration,
-    ) -> impl Future<Output = Result<(), JsValue>> + 'static {
+    pub(crate) fn sleep(&self, duration: Duration) -> impl Future<Output = JsResult<()>> + 'static {
         let (tx, rx) = oneshot::channel();
         self.window
             .set_timeout_with_callback_and_timeout_and_arguments_0(
@@ -85,7 +84,7 @@ impl Context {
     }
 }
 
-pub(crate) fn set_icon(element: &Element, value: &str) -> Result<(), JsValue> {
+pub(crate) fn set_icon(element: &Element, value: &str) -> JsResult<()> {
     let class_list = element.class_list();
     for item in class_list.value().split_whitespace() {
         if let Some(v) = item.strip_prefix("bi-")
@@ -114,7 +113,7 @@ impl ops::Deref for InputValidation {
 }
 
 impl InputValidation {
-    pub(crate) fn new(cx: &Context, element_id: &str) -> Result<Self, JsValue> {
+    pub(crate) fn new(cx: &Context, element_id: &str) -> JsResult<Self> {
         Ok(Self {
             group: cx.get_element_by_id(&format!("{element_id}:group"))?,
             input: cx.get_element_by_id(element_id)?,
@@ -122,7 +121,7 @@ impl InputValidation {
         })
     }
 
-    pub(crate) fn set_validation<T, E>(&self, value: Option<Result<T, E>>) -> Result<(), JsValue>
+    pub(crate) fn set_validation<T, E>(&self, value: Option<Result<T, E>>) -> JsResult<()>
     where
         E: fmt::Display,
     {

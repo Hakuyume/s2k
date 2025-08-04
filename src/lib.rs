@@ -6,17 +6,19 @@ use argon2::password_hash::{self, PasswordHashString, SaltString};
 use argon2::{Argon2, PasswordHasher, PasswordVerifier};
 use futures::{FutureExt, TryFutureExt};
 use std::pin;
+use std::rc::Rc;
 use std::time::Duration;
 use strum::{EnumMessage, IntoEnumIterator};
 use tokio::sync::watch;
 use wasm_bindgen::prelude::{JsCast, JsValue, wasm_bindgen};
 use wasm_bindgen_futures::JsFuture;
+use web::JsResult;
 use web_sys::{HtmlButtonElement, HtmlInputElement, HtmlOptionElement, HtmlSelectElement};
 
 const STORAGE_KEY: &str = concat!(env!("CARGO_CRATE_NAME"), "/hash");
 
 #[wasm_bindgen(start)]
-pub async fn start() -> Result<(), JsValue> {
+pub async fn start() -> JsResult<()> {
     let argon2 = Argon2::default();
     let argon2 = &argon2;
 
@@ -84,16 +86,16 @@ pub async fn start() -> Result<(), JsValue> {
     futures::future::try_join(f0, f1).map_ok(|_| ()).await
 }
 
+type Closure = wasm_bindgen::prelude::Closure<dyn FnMut() -> JsResult<()>>;
+type Validation<E> = watch::Sender<Option<Result<(), E>>>;
+
 fn password(
     cx: &web::Context,
-) -> Result<
-    (
-        watch::Receiver<String>,
-        watch::Sender<Option<Result<(), password_hash::Error>>>,
-        impl Future<Output = Result<impl Sized, JsValue>>,
-    ),
-    JsValue,
-> {
+) -> JsResult<(
+    watch::Receiver<String>,
+    Validation<password_hash::Error>,
+    impl Future<Output = JsResult<impl Sized>>,
+)> {
     let (tx, rx) = watch::channel(String::new());
     let (validation_tx, validation_rx) = watch::channel(None);
 
@@ -143,13 +145,10 @@ fn password(
 
 fn hash_actual(
     cx: &web::Context,
-) -> Result<
-    (
-        watch::Sender<Option<PasswordHashString>>,
-        impl Future<Output = Result<impl Sized, JsValue>>,
-    ),
-    JsValue,
-> {
+) -> JsResult<(
+    watch::Sender<Option<PasswordHashString>>,
+    impl Future<Output = JsResult<impl Sized>>,
+)> {
     let (tx, rx) = watch::channel::<Option<PasswordHashString>>(None);
 
     let output = cx.get_element_by_id::<HtmlInputElement>("hash-actual")?;
@@ -185,17 +184,14 @@ fn hash_actual(
 
 fn hash_expected(
     cx: &web::Context,
-) -> Result<
-    (
-        watch::Receiver<Option<PasswordHashString>>,
-        impl Future<Output = Result<impl Sized, JsValue>>,
-    ),
-    JsValue,
-> {
+) -> JsResult<(
+    watch::Receiver<Option<PasswordHashString>>,
+    impl Future<Output = JsResult<impl Sized>>,
+)> {
     let (tx, rx) = watch::channel(None);
     let (input_tx, input_rx) = watch::channel(String::new());
 
-    let input = web::InputValidation::new(&cx, "hash-expected")?;
+    let input = web::InputValidation::new(cx, "hash-expected")?;
     let load = cx.get_element_by_id::<HtmlButtonElement>("hash-expected:load")?;
 
     let f = watch1(input_rx.clone(), {
@@ -239,7 +235,7 @@ fn hash_expected(
     Ok((rx, f))
 }
 
-fn algorithm(cx: &web::Context) -> Result<watch::Receiver<algorithm::Algorithm>, JsValue> {
+fn algorithm(cx: &web::Context) -> JsResult<watch::Receiver<algorithm::Algorithm>> {
     let (tx, rx) = watch::channel(algorithm::Algorithm::default());
 
     let input = cx.get_element_by_id::<HtmlSelectElement>("algorithm")?;
@@ -280,14 +276,11 @@ fn algorithm(cx: &web::Context) -> Result<watch::Receiver<algorithm::Algorithm>,
 
 fn salt(
     cx: &web::Context,
-) -> Result<
-    (
-        watch::Receiver<String>,
-        watch::Sender<Option<Result<(), argon2::Error>>>,
-        impl Future<Output = Result<impl Sized, JsValue>>,
-    ),
-    JsValue,
-> {
+) -> JsResult<(
+    watch::Receiver<String>,
+    Validation<argon2::Error>,
+    impl Future<Output = JsResult<impl Sized>>,
+)> {
     let (tx, rx) = watch::channel(String::new());
     let (validation_tx, validation_rx) = watch::channel(None);
 
@@ -325,22 +318,20 @@ fn salt(
 
 fn key(
     cx: &web::Context,
-) -> Result<
-    (
-        watch::Sender<Option<String>>,
-        impl Future<Output = Result<impl Sized, JsValue>>,
-    ),
-    JsValue,
-> {
+) -> JsResult<(
+    watch::Sender<Option<String>>,
+    impl Future<Output = JsResult<impl Sized>>,
+)> {
     let (tx, rx) = watch::channel::<Option<String>>(None);
     let (visible_tx, visible_rx) = watch::channel(false);
-    let (copy_icon_tx, copy_icon_rx) = watch::channel(false);
+    let copy_notify = Rc::new(tokio::sync::Notify::new());
+    let (copy_state_tx, copy_state_rx) = watch::channel(false);
 
     let output = cx.get_element_by_id::<HtmlInputElement>("key")?;
     let toggle = cx.get_element_by_id::<HtmlButtonElement>("key:toggle")?;
     let copy = cx.get_element_by_id::<HtmlButtonElement>("key:copy")?;
 
-    let f = futures::future::try_join3(
+    let f = futures::future::try_join4(
         watch1(rx.clone(), {
             let output = output.clone();
             let toggle = toggle.clone();
@@ -367,10 +358,29 @@ fn key(
                 Ok(())
             }
         }),
-        watch1(copy_icon_rx.clone(), {
+        {
+            let rx = rx.clone();
+            let copy_notify = copy_notify.clone();
+            let copy_state_tx = copy_state_tx.clone();
+            let cx = cx.clone();
+            async move {
+                loop {
+                    copy_notify.notified().await;
+                    if let Some(value) = &*rx.borrow() {
+                        JsFuture::from(cx.clipboard().write_text(value)).await?;
+                        let _ = copy_state_tx.send(true);
+                        cx.sleep(Duration::from_secs(1)).await?;
+                    }
+                    let _ = copy_state_tx.send(false);
+                }
+                #[allow(unreachable_code)]
+                Ok(())
+            }
+        },
+        watch1(copy_state_rx.clone(), {
             let copy = copy.clone();
-            async move |copy_icon| {
-                if *copy_icon {
+            async move |copy_state| {
+                if *copy_state {
                     web::set_icon(&copy, "clipboard-check")?;
                 } else {
                     web::set_icon(&copy, "clipboard")?;
@@ -393,25 +403,9 @@ fn key(
     ));
     copy.set_onclick(Some(
         Closure::new({
-            let rx = rx.clone();
-            let cx = cx.clone();
-            let copy_icon_tx = copy_icon_tx.clone();
+            let notify = copy_notify.clone();
             move || {
-                let rx = rx.clone();
-                let cx = cx.clone();
-                let copy_icon_tx = copy_icon_tx.clone();
-                wasm_bindgen_futures::spawn_local(
-                    async move {
-                        if let Some(value) = &*rx.borrow() {
-                            JsFuture::from(cx.clipboard().write_text(value)).await?;
-                            let _ = copy_icon_tx.send(true);
-                            cx.sleep(Duration::from_secs(1)).await?;
-                            let _ = copy_icon_tx.send(false);
-                        }
-                        Ok::<_, JsValue>(())
-                    }
-                    .map(|_| ()),
-                );
+                notify.notify_waiters();
                 Ok(())
             }
         })
@@ -422,11 +416,9 @@ fn key(
     Ok((tx, f))
 }
 
-type Closure = wasm_bindgen::prelude::Closure<dyn FnMut() -> Result<(), JsValue>>;
-
-async fn watch1<T0, F>(mut rx0: watch::Receiver<T0>, mut f: F) -> Result<(), JsValue>
+async fn watch1<T0, F>(mut rx0: watch::Receiver<T0>, mut f: F) -> JsResult<()>
 where
-    F: AsyncFnMut(&T0) -> Result<(), JsValue>,
+    F: AsyncFnMut(&T0) -> JsResult<()>,
 {
     loop {
         f(&*rx0.borrow_and_update()).await?;
@@ -440,9 +432,9 @@ async fn watch2<T0, T1, F>(
     mut rx0: watch::Receiver<T0>,
     mut rx1: watch::Receiver<T1>,
     mut f: F,
-) -> Result<(), JsValue>
+) -> JsResult<()>
 where
-    F: AsyncFnMut(&T0, &T1) -> Result<(), JsValue>,
+    F: AsyncFnMut(&T0, &T1) -> JsResult<()>,
 {
     loop {
         f(&*rx0.borrow_and_update(), &*rx1.borrow_and_update()).await?;
@@ -460,9 +452,9 @@ async fn watch3<T0, T1, T2, F>(
     mut rx1: watch::Receiver<T1>,
     mut rx2: watch::Receiver<T2>,
     mut f: F,
-) -> Result<(), JsValue>
+) -> JsResult<()>
 where
-    F: AsyncFnMut(&T0, &T1, &T2) -> Result<(), JsValue>,
+    F: AsyncFnMut(&T0, &T1, &T2) -> JsResult<()>,
 {
     loop {
         f(
