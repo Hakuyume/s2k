@@ -1,3 +1,4 @@
+use argon2::{Argon2, Params};
 use base64::prelude::{BASE64_STANDARD, Engine};
 
 #[derive(
@@ -25,7 +26,7 @@ pub(crate) enum Algorithm {
 impl Algorithm {
     pub(crate) fn key<P, S>(
         self,
-        argon2: &argon2::Argon2<'_>,
+        argon2: &Argon2<'_>,
         password: P,
         salt: S,
     ) -> Result<String, argon2::Error>
@@ -47,19 +48,28 @@ impl Algorithm {
                     .map(|_| BASE64_STANDARD.encode(key))
             }
             Algorithm::Argon2id4 => {
-                let mut key = [0u8; 2];
+                let mut key = [0u8; Params::DEFAULT_OUTPUT_LEN];
                 argon2
                     .hash_password_into(password.as_ref(), salt.as_ref(), &mut key)
-                    .map(|_| format!("{:04}", u16::from_be_bytes(key) % 10_000))
+                    .map(|_| digits(&key, 4))
             }
             Algorithm::Argon2id6 => {
-                let mut key = [0u8; 4];
+                let mut key = [0u8; Params::DEFAULT_OUTPUT_LEN];
                 argon2
                     .hash_password_into(password.as_ref(), salt.as_ref(), &mut key)
-                    .map(|_| format!("{:06}", u32::from_be_bytes(key) % 1_000_000))
+                    .map(|_| digits(&key, 6))
             }
         }
     }
+}
+
+fn digits(key: &[u8], n: u32) -> String {
+    let d = 10_u32.pow(n);
+    format!(
+        "{:01$}",
+        key.iter().fold(0_u32, |r, b| ((r << 8) + (*b as u32)) % d),
+        n as _,
+    )
 }
 
 #[cfg(test)]
@@ -74,5 +84,21 @@ mod tests {
                 .unwrap(),
             "koBvTFMBiW3E247iA86fq//8WZrOb8jUWXstei0b5NY=",
         );
+    }
+
+    #[test]
+    fn test_argon2id6() {
+        assert_eq!(
+            super::Algorithm::Argon2id6
+                .key(&Argon2::default(), "password", "salt2025")
+                .unwrap(),
+            "030230",
+        );
+    }
+
+    #[test]
+    fn test_digits() {
+        assert_eq!(super::digits(b"key", 6), "038329");
+        assert_eq!(super::digits(b"keykeykeykey", 6), "438201");
     }
 }
