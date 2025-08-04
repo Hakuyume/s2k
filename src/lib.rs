@@ -1,22 +1,17 @@
 mod algorithm;
-mod document;
+mod web;
 
 use argon2::password_hash::rand_core::OsRng;
 use argon2::password_hash::{self, PasswordHashString, SaltString};
 use argon2::{Argon2, PasswordHasher, PasswordVerifier};
-use futures::channel::oneshot;
 use futures::{FutureExt, TryFutureExt};
-use std::future;
 use std::pin;
 use std::time::Duration;
 use strum::{EnumMessage, IntoEnumIterator};
 use tokio::sync::watch;
 use wasm_bindgen::prelude::{JsCast, JsValue, wasm_bindgen};
 use wasm_bindgen_futures::JsFuture;
-use web_sys::{
-    Clipboard, Document, HtmlButtonElement, HtmlInputElement, HtmlOptionElement, HtmlSelectElement,
-    Storage, Window,
-};
+use web_sys::{HtmlButtonElement, HtmlInputElement, HtmlOptionElement, HtmlSelectElement};
 
 const STORAGE_KEY: &str = concat!(env!("CARGO_CRATE_NAME"), "/hash");
 
@@ -25,19 +20,12 @@ pub async fn start() -> Result<(), JsValue> {
     let argon2 = Argon2::default();
     let argon2 = &argon2;
 
-    let window = web_sys::window().ok_or_else(|| JsValue::from("missing window"))?;
-    let document = window
-        .document()
-        .ok_or_else(|| JsValue::from("missing document"))?;
-    let storage = window
-        .local_storage()?
-        .ok_or_else(|| JsValue::from("missing local_storage"))?;
-    let clipboard = window.navigator().clipboard();
+    let cx = web::Context::new()?;
 
     let (f0, password) = {
-        let (password, password_validation, f0) = password(&document)?;
-        let (hash_actual, f1) = hash_actual(&document, &storage)?;
-        let (hash_expected, f2) = hash_expected(&document, &storage)?;
+        let (password, password_validation, f0) = password(&cx)?;
+        let (hash_actual, f1) = hash_actual(&cx)?;
+        let (hash_expected, f2) = hash_expected(&cx)?;
         let f = futures::future::try_join5(
             f0,
             f1,
@@ -66,9 +54,9 @@ pub async fn start() -> Result<(), JsValue> {
         (f, password)
     };
     let f1 = {
-        let algorithm = algorithm(&document)?;
-        let (salt, salt_validation, f0) = salt(&document)?;
-        let (key, f1) = key(&window, &document, &clipboard)?;
+        let algorithm = algorithm(&cx)?;
+        let (salt, salt_validation, f0) = salt(&cx)?;
+        let (key, f1) = key(&cx)?;
         futures::future::try_join3(
             f0,
             f1,
@@ -97,7 +85,7 @@ pub async fn start() -> Result<(), JsValue> {
 }
 
 fn password(
-    document: &Document,
+    cx: &web::Context,
 ) -> Result<
     (
         watch::Receiver<String>,
@@ -109,8 +97,8 @@ fn password(
     let (tx, rx) = watch::channel(String::new());
     let (validation_tx, validation_rx) = watch::channel(None);
 
-    let input = document::InputGroup::new(&document, "password")?;
-    let clear = document::get_element_by_id::<HtmlButtonElement>(&document, "password:clear")?;
+    let input = web::InputValidation::new(cx, "password")?;
+    let clear = cx.get_element_by_id::<HtmlButtonElement>("password:clear")?;
 
     let f = futures::future::try_join(
         watch1(rx.clone(), {
@@ -154,8 +142,7 @@ fn password(
 }
 
 fn hash_actual(
-    document: &Document,
-    storage: &Storage,
+    cx: &web::Context,
 ) -> Result<
     (
         watch::Sender<Option<PasswordHashString>>,
@@ -165,8 +152,8 @@ fn hash_actual(
 > {
     let (tx, rx) = watch::channel::<Option<PasswordHashString>>(None);
 
-    let output = document::get_element_by_id::<HtmlInputElement>(&document, "hash-actual")?;
-    let store = document::get_element_by_id::<HtmlButtonElement>(&document, "hash-actual:store")?;
+    let output = cx.get_element_by_id::<HtmlInputElement>("hash-actual")?;
+    let store = cx.get_element_by_id::<HtmlButtonElement>("hash-actual:store")?;
 
     let f = watch1(rx.clone(), {
         let output = output.clone();
@@ -181,10 +168,10 @@ fn hash_actual(
     store.set_onclick(Some(
         Closure::new({
             let rx = rx.clone();
-            let storage = storage.clone();
+            let cx = cx.clone();
             move || {
                 if let Some(value) = &*rx.borrow() {
-                    storage.set(STORAGE_KEY, value.as_str())?;
+                    cx.storage().set(STORAGE_KEY, value.as_str())?;
                 }
                 Ok(())
             }
@@ -197,8 +184,7 @@ fn hash_actual(
 }
 
 fn hash_expected(
-    document: &Document,
-    storage: &Storage,
+    cx: &web::Context,
 ) -> Result<
     (
         watch::Receiver<Option<PasswordHashString>>,
@@ -209,8 +195,8 @@ fn hash_expected(
     let (tx, rx) = watch::channel(None);
     let (input_tx, input_rx) = watch::channel(String::new());
 
-    let input = document::InputGroup::new(&document, "hash-expected")?;
-    let load = document::get_element_by_id::<HtmlButtonElement>(&document, "hash-expected:load")?;
+    let input = web::InputValidation::new(&cx, "hash-expected")?;
+    let load = cx.get_element_by_id::<HtmlButtonElement>("hash-expected:load")?;
 
     let f = watch1(input_rx.clone(), {
         let input = input.clone();
@@ -238,9 +224,9 @@ fn hash_expected(
     load.set_onclick(Some(
         Closure::new({
             let tx = input_tx.clone();
-            let storage = storage.clone();
+            let cx = cx.clone();
             move || {
-                if let Some(value) = storage.get(STORAGE_KEY)? {
+                if let Some(value) = cx.storage().get(STORAGE_KEY)? {
                     let _ = tx.send(value);
                 }
                 Ok(())
@@ -253,10 +239,10 @@ fn hash_expected(
     Ok((rx, f))
 }
 
-fn algorithm(document: &Document) -> Result<watch::Receiver<algorithm::Algorithm>, JsValue> {
+fn algorithm(cx: &web::Context) -> Result<watch::Receiver<algorithm::Algorithm>, JsValue> {
     let (tx, rx) = watch::channel(algorithm::Algorithm::default());
 
-    let input = document::get_element_by_id::<HtmlSelectElement>(document, "algorithm")?;
+    let input = cx.get_element_by_id::<HtmlSelectElement>("algorithm")?;
 
     let options = input.options();
     options.set_length(0);
@@ -293,7 +279,7 @@ fn algorithm(document: &Document) -> Result<watch::Receiver<algorithm::Algorithm
 }
 
 fn salt(
-    document: &Document,
+    cx: &web::Context,
 ) -> Result<
     (
         watch::Receiver<String>,
@@ -305,7 +291,7 @@ fn salt(
     let (tx, rx) = watch::channel(String::new());
     let (validation_tx, validation_rx) = watch::channel(None);
 
-    let input = document::InputGroup::new(document, "salt")?;
+    let input = web::InputValidation::new(cx, "salt")?;
 
     let f = futures::future::try_join(
         watch1(rx.clone(), {
@@ -338,9 +324,7 @@ fn salt(
 }
 
 fn key(
-    window: &Window,
-    document: &Document,
-    clipboard: &Clipboard,
+    cx: &web::Context,
 ) -> Result<
     (
         watch::Sender<Option<String>>,
@@ -352,9 +336,9 @@ fn key(
     let (visible_tx, visible_rx) = watch::channel(false);
     let (copy_icon_tx, copy_icon_rx) = watch::channel(false);
 
-    let output = document::get_element_by_id::<HtmlInputElement>(&document, "key")?;
-    let toggle = document::get_element_by_id::<HtmlButtonElement>(&document, "key:toggle")?;
-    let copy = document::get_element_by_id::<HtmlButtonElement>(&document, "key:copy")?;
+    let output = cx.get_element_by_id::<HtmlInputElement>("key")?;
+    let toggle = cx.get_element_by_id::<HtmlButtonElement>("key:toggle")?;
+    let copy = cx.get_element_by_id::<HtmlButtonElement>("key:copy")?;
 
     let f = futures::future::try_join3(
         watch1(rx.clone(), {
@@ -375,10 +359,10 @@ fn key(
             async move |visible| {
                 if *visible {
                     output.set_type("text");
-                    document::set_icon(&toggle, "eye")?;
+                    web::set_icon(&toggle, "eye")?;
                 } else {
                     output.set_type("password");
-                    document::set_icon(&toggle, "eye-slash")?;
+                    web::set_icon(&toggle, "eye-slash")?;
                 }
                 Ok(())
             }
@@ -387,9 +371,9 @@ fn key(
             let copy = copy.clone();
             async move |copy_icon| {
                 if *copy_icon {
-                    document::set_icon(&copy, "clipboard-check")?;
+                    web::set_icon(&copy, "clipboard-check")?;
                 } else {
-                    document::set_icon(&copy, "clipboard")?;
+                    web::set_icon(&copy, "clipboard")?;
                 }
                 Ok(())
             }
@@ -410,20 +394,18 @@ fn key(
     copy.set_onclick(Some(
         Closure::new({
             let rx = rx.clone();
+            let cx = cx.clone();
             let copy_icon_tx = copy_icon_tx.clone();
-            let window = window.clone();
-            let clipboard = clipboard.clone();
             move || {
                 let rx = rx.clone();
+                let cx = cx.clone();
                 let copy_icon_tx = copy_icon_tx.clone();
-                let window = window.clone();
-                let clipboard = clipboard.clone();
                 wasm_bindgen_futures::spawn_local(
                     async move {
                         if let Some(value) = &*rx.borrow() {
-                            JsFuture::from(clipboard.write_text(value)).await?;
+                            JsFuture::from(cx.clipboard().write_text(value)).await?;
                             let _ = copy_icon_tx.send(true);
-                            sleep(&window, Duration::from_secs(1)).await?;
+                            cx.sleep(Duration::from_secs(1)).await?;
                             let _ = copy_icon_tx.send(false);
                         }
                         Ok::<_, JsValue>(())
@@ -499,24 +481,4 @@ where
             break Ok(());
         }
     }
-}
-
-fn sleep(
-    window: &Window,
-    duration: Duration,
-) -> impl Future<Output = Result<(), JsValue>> + 'static {
-    let (tx, rx) = oneshot::channel();
-    window
-        .set_timeout_with_callback_and_timeout_and_arguments_0(
-            wasm_bindgen::prelude::Closure::once(move || {
-                let _ = tx.send(());
-            })
-            .into_js_value()
-            .unchecked_ref(),
-            duration.as_millis() as _,
-        )
-        .map_or_else(
-            |e| futures::future::Either::Right(future::ready(Err(e))),
-            |_| futures::future::Either::Left(rx.map_err(|e| JsValue::from(&e.to_string()))),
-        )
 }
