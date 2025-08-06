@@ -2,7 +2,6 @@ use futures::TryFutureExt;
 use futures::channel::oneshot;
 use std::any;
 use std::fmt;
-use std::future;
 use std::ops;
 use std::rc::Rc;
 use std::time::Duration;
@@ -67,8 +66,31 @@ impl Context {
     }
 
     pub(crate) fn sleep(&self, duration: Duration) -> impl Future<Output = JsResult<()>> + 'static {
+        fn defer<F>(f: F) -> impl Drop
+        where
+            F: FnOnce(),
+        {
+            struct Guard<F>(Option<F>)
+            where
+                F: FnOnce();
+
+            impl<F> Drop for Guard<F>
+            where
+                F: FnOnce(),
+            {
+                fn drop(&mut self) {
+                    if let Some(f) = self.0.take() {
+                        f()
+                    }
+                }
+            }
+
+            Guard(Some(f))
+        }
+
         let (tx, rx) = oneshot::channel();
-        self.window
+        let handle = self
+            .window
             .set_timeout_with_callback_and_timeout_and_arguments_0(
                 wasm_bindgen::prelude::Closure::once(move || {
                     let _ = tx.send(());
@@ -76,11 +98,13 @@ impl Context {
                 .into_js_value()
                 .unchecked_ref(),
                 duration.as_millis() as _,
-            )
-            .map_or_else(
-                |e| futures::future::Either::Right(future::ready(Err(e))),
-                |_| futures::future::Either::Left(rx.map_err(|e| JsValue::from(&e.to_string()))),
-            )
+            );
+        let window = self.window.clone();
+        async move {
+            let handle = handle?;
+            let _guard = defer(|| window.clear_timeout_with_handle(handle));
+            rx.map_err(|e| JsValue::from(&e.to_string())).await
+        }
     }
 }
 
