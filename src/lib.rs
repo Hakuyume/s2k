@@ -1,4 +1,4 @@
-mod algorithm;
+mod s2k;
 mod web;
 
 use argon2::password_hash::rand_core::OsRng;
@@ -235,20 +235,20 @@ fn hash_expected(
     Ok((rx, f))
 }
 
-fn algorithm(cx: &web::Context) -> JsResult<watch::Receiver<algorithm::Algorithm>> {
-    let (tx, rx) = watch::channel(algorithm::Algorithm::default());
+fn algorithm(cx: &web::Context) -> JsResult<watch::Receiver<s2k::Algorithm>> {
+    let (tx, rx) = watch::channel(s2k::Algorithm::default());
 
     let input = cx.get_element_by_id::<HtmlSelectElement>("algorithm")?;
 
     let options = input.options();
     options.set_length(0);
-    for algorithm in algorithm::Algorithm::iter() {
+    for algorithm in s2k::Algorithm::iter() {
         let option = HtmlOptionElement::new()?;
         option.set_value(&algorithm.to_string());
         if let Some(message) = algorithm.get_message() {
             option.set_inner_text(message);
         }
-        if algorithm == algorithm::Algorithm::default() {
+        if algorithm == s2k::Algorithm::default() {
             option.set_selected(true);
         }
         options.add_with_html_option_element(&option)?;
@@ -261,7 +261,7 @@ fn algorithm(cx: &web::Context) -> JsResult<watch::Receiver<algorithm::Algorithm
                 let _ = tx.send(
                     input
                         .value()
-                        .parse::<algorithm::Algorithm>()
+                        .parse::<s2k::Algorithm>()
                         .map_err(|e| JsValue::from(&e.to_string()))?,
                 );
                 Ok(())
