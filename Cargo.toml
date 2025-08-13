@@ -6,30 +6,18 @@ edition = "2024"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
-[lib]
-crate-type = ["cdylib"]
-
 [dependencies]
+anyhow = "1.0.99"
 argon2 = { version = "0.5.3", features = ["std"] }
 base64 = "0.22.1"
+bitflags = "2.9.1"
+clap = { version = "4.5.45", features = ["derive"] }
+crossterm = { version = "0.28.1", features = ["event-stream"] }
+dirs = "6.0.0"
 futures = { version = "0.3.31", default-features = false, features = ["alloc"] }
-# https://docs.rs/getrandom/0.2.15/getrandom/index.html#webassembly-support
-getrandom = { version = "0.2.16", features = ["js"] }
-js-sys = "0.3.77"
+ratatui = "0.29.0"
+serde = { version = "1.0.219", features = ["derive"] }
+serde_json = "1.0.142"
 strum = { version = "0.27.2", features = ["derive"] }
-tokio = { version = "1.47.0", features = ["sync"] }
-wasm-bindgen = "0.2.100"
-wasm-bindgen-futures = "0.4.50"
-web-sys = { version = "0.3.77", features = [
-  "Clipboard",
-  "Document",
-  "DomTokenList",
-  "HtmlButtonElement",
-  "HtmlInputElement",
-  "HtmlOptionElement",
-  "HtmlOptionsCollection",
-  "HtmlSelectElement",
-  "Navigator",
-  "Storage",
-  "Window",
-] }
+tokio = { version = "1.47.1", features = ["fs", "io-util", "macros", "process", "rt-multi-thread", "sync", "time"] }
+unicode-width = "0.2.0"

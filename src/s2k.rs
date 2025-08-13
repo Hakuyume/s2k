@@ -1,31 +1,21 @@
 use argon2::{Argon2, Params};
 use base64::prelude::{BASE64_STANDARD, Engine};
 
-#[derive(
-    Clone,
-    Copy,
-    Default,
-    PartialEq,
-    strum::Display,
-    strum::EnumIter,
-    strum::EnumMessage,
-    strum::EnumString,
-)]
+#[derive(strum::EnumCount, strum::EnumMessage, strum::VariantArray)]
 pub(crate) enum Algorithm {
-    #[default]
-    #[strum(message = "argon2id (256 bits)")]
+    /// argon2id (256 bits)
     Argon2id256,
-    #[strum(message = "argon2id (512 bits)")]
+    /// argon2id (512 bits)
     Argon2id512,
-    #[strum(message = "argon2id (4 digits)")]
+    /// argon2id (4 digits)
     Argon2id4,
-    #[strum(message = "argon2id (6 digits)")]
+    /// argon2id (6 digits)
     Argon2id6,
 }
 
 impl Algorithm {
     pub(crate) fn key<P, S>(
-        self,
+        &self,
         argon2: &Argon2<'_>,
         password: P,
         salt: S,
