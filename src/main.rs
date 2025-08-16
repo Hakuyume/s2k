@@ -245,16 +245,7 @@ impl App {
 
     fn handle(&mut self, event: event::Event) -> ControlFlow<()> {
         match (&self.actions[self.cursor], self.editing, event) {
-            (
-                _,
-                _,
-                event::Event::Key(event::KeyEvent {
-                    code: event::KeyCode::Char('c'),
-                    modifiers: event::KeyModifiers::CONTROL,
-                    kind: event::KeyEventKind::Press | event::KeyEventKind::Repeat,
-                    ..
-                }),
-            ) => ControlFlow::Break(()),
+            (_, _, crate::key!(CONTROL('c'))) => ControlFlow::Break(()),
             (_, false, crate::key!(UP) | crate::key!(LEFT)) => {
                 self.cursor = self.cursor.saturating_sub(1);
                 ControlFlow::Continue(())

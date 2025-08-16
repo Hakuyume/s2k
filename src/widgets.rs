@@ -39,94 +39,40 @@ where
 
 #[macro_export]
 macro_rules! key {
+    (CONTROL($c:literal)) => {
+        ::crossterm::event::Event::Key(::crossterm::event::KeyEvent {
+            code: ::crossterm::event::KeyCode::Char($c),
+            modifiers: ::crossterm::event::KeyModifiers::CONTROL,
+            kind: ::crossterm::event::KeyEventKind::Press
+                | ::crossterm::event::KeyEventKind::Repeat,
+            ..
+        })
+    };
+    (__CODE($code:pat)) => {
+        ::crossterm::event::Event::Key(::crossterm::event::KeyEvent {
+            code: $code,
+            modifiers: ::crossterm::event::KeyModifiers::NONE,
+            kind: ::crossterm::event::KeyEventKind::Press
+                | ::crossterm::event::KeyEventKind::Repeat,
+            ..
+        })
+    };
     (UP) => {
-        event::Event::Key(
-            event::KeyEvent {
-                code: event::KeyCode::Char('p'),
-                modifiers: event::KeyModifiers::CONTROL,
-                kind: event::KeyEventKind::Press | event::KeyEventKind::Repeat,
-                ..
-            } | event::KeyEvent {
-                code: event::KeyCode::Up,
-                modifiers: event::KeyModifiers::NONE,
-                kind: event::KeyEventKind::Press | event::KeyEventKind::Repeat,
-                ..
-            },
-        )
+        $crate::key!(CONTROL('p')) | $crate::key!(__CODE(::crossterm::event::KeyCode::Up))
     };
     (DOWN) => {
-        event::Event::Key(
-            event::KeyEvent {
-                code: event::KeyCode::Char('n'),
-                modifiers: event::KeyModifiers::CONTROL,
-                kind: event::KeyEventKind::Press | event::KeyEventKind::Repeat,
-                ..
-            } | event::KeyEvent {
-                code: event::KeyCode::Down,
-                modifiers: event::KeyModifiers::NONE,
-                kind: event::KeyEventKind::Press | event::KeyEventKind::Repeat,
-                ..
-            },
-        )
+        $crate::key!(CONTROL('n')) | $crate::key!(__CODE(::crossterm::event::KeyCode::Down))
     };
     (LEFT) => {
-        event::Event::Key(
-            event::KeyEvent {
-                code: event::KeyCode::Char('b'),
-                modifiers: event::KeyModifiers::CONTROL,
-                kind: event::KeyEventKind::Press | event::KeyEventKind::Repeat,
-                ..
-            } | event::KeyEvent {
-                code: event::KeyCode::Left,
-                modifiers: event::KeyModifiers::NONE,
-                kind: event::KeyEventKind::Press | event::KeyEventKind::Repeat,
-                ..
-            },
-        )
+        $crate::key!(CONTROL('b')) | $crate::key!(__CODE(::crossterm::event::KeyCode::Left))
     };
     (RIGHT) => {
-        event::Event::Key(
-            event::KeyEvent {
-                code: event::KeyCode::Char('f'),
-                modifiers: event::KeyModifiers::CONTROL,
-                kind: event::KeyEventKind::Press | event::KeyEventKind::Repeat,
-                ..
-            } | event::KeyEvent {
-                code: event::KeyCode::Right,
-                modifiers: event::KeyModifiers::NONE,
-                kind: event::KeyEventKind::Press | event::KeyEventKind::Repeat,
-                ..
-            },
-        )
+        $crate::key!(CONTROL('f')) | $crate::key!(__CODE(::crossterm::event::KeyCode::Right))
     };
     (ENTER) => {
-        event::Event::Key(
-            event::KeyEvent {
-                code: event::KeyCode::Char('m'),
-                modifiers: event::KeyModifiers::CONTROL,
-                kind: event::KeyEventKind::Press | event::KeyEventKind::Repeat,
-                ..
-            } | event::KeyEvent {
-                code: event::KeyCode::Enter,
-                modifiers: event::KeyModifiers::NONE,
-                kind: event::KeyEventKind::Press | event::KeyEventKind::Repeat,
-                ..
-            },
-        )
+        $crate::key!(CONTROL('m')) | $crate::key!(__CODE(::crossterm::event::KeyCode::Enter))
     };
     (BACKSPACE) => {
-        event::Event::Key(
-            event::KeyEvent {
-                code: event::KeyCode::Char('h'),
-                modifiers: event::KeyModifiers::CONTROL,
-                kind: event::KeyEventKind::Press | event::KeyEventKind::Repeat,
-                ..
-            } | event::KeyEvent {
-                code: event::KeyCode::Backspace,
-                modifiers: event::KeyModifiers::NONE,
-                kind: event::KeyEventKind::Press | event::KeyEventKind::Repeat,
-                ..
-            },
-        )
+        $crate::key!(CONTROL('h')) | $crate::key!(__CODE(::crossterm::event::KeyCode::Backspace))
     };
 }

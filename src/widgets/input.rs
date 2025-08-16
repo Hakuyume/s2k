@@ -168,6 +168,14 @@ impl InputState {
                 }
                 ControlFlow::Continue(())
             }
+            crate::key!(CONTROL('a')) => {
+                self.index = 0;
+                ControlFlow::Continue(())
+            }
+            crate::key!(CONTROL('e')) => {
+                self.index = self.value().len();
+                ControlFlow::Continue(())
+            }
             event::Event::Key(event::KeyEvent {
                 code: event::KeyCode::Char(c),
                 modifiers: event::KeyModifiers::NONE | event::KeyModifiers::SHIFT,
