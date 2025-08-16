@@ -19,6 +19,10 @@ use std::time::Duration;
 use tokio::io::AsyncWriteExt;
 use widgets::{Input, InputState, Output, OutputState, Select, SelectState};
 
+#[global_allocator]
+static ALLOC: zeroizing_alloc::ZeroAlloc<std::alloc::System> =
+    zeroizing_alloc::ZeroAlloc(std::alloc::System);
+
 #[derive(Parser)]
 struct Args {
     #[clap(long, num_args = 1..)]
