@@ -1,4 +1,4 @@
-name: build
+name: cargo
 
 on:
   push:
@@ -40,36 +40,3 @@ jobs:
             ~/.cargo/git/db/
           key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
       - run: cargo test --locked
-  trunk-build:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      # https://github.com/actions/cache/blob/master/examples.md#rust---cargo
-      - uses: actions/cache@v4
-        with:
-          path: |
-            ~/.cargo/bin/
-            ~/.cargo/registry/index/
-            ~/.cargo/registry/cache/
-            ~/.cargo/git/db/
-          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
-      - run: |
-          rustup target add wasm32-unknown-unknown
-          curl -L https://github.com/trunk-rs/trunk/releases/download/v0.21.14/trunk-x86_64-unknown-linux-gnu.tar.gz | tar -xzf -
-          ./trunk build --locked --public-url=/s2k/ --release
-      - uses: actions/upload-pages-artifact@v3
-        with:
-          path: dist/
-  deploy-pages:
-    if: ${{ github.ref == 'refs/heads/main' }}
-    needs: trunk-build
-    permissions:
-      pages: write
-      id-token: write
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/deploy-pages@v4
-        id: deployment
