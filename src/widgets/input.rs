@@ -1,6 +1,6 @@
 use ratatui::crossterm::event;
 use ratatui::style::{self, Stylize};
-use ratatui::{layout, widgets};
+use ratatui::{layout, text, widgets};
 use std::borrow::Cow;
 use std::fmt;
 use std::iter;
@@ -38,11 +38,7 @@ impl<'a> Input<'a> {
     }
 
     pub fn vertical(&self) -> layout::Constraint {
-        if !self.editing && matches!(self.state.validation, Some(Err(_))) {
-            layout::Constraint::Length(1 + 2 + 1)
-        } else {
-            layout::Constraint::Length(1 + 2)
-        }
+        layout::Constraint::Length(1 + 2)
     }
 
     pub fn render(self, frame: &mut ratatui::Frame, area: layout::Rect) {
@@ -88,22 +84,6 @@ impl<'a> Input<'a> {
             (view, None)
         };
 
-        let area = if !self.editing
-            && let Some(Err(e)) = &self.state.validation
-        {
-            let [area, area_validation] = layout::Layout::vertical([
-                layout::Constraint::Length(1 + 2),
-                layout::Constraint::Length(1),
-            ])
-            .areas(area);
-            frame.render_widget(
-                widgets::Paragraph::new(e.as_str()).style(style::Style::default().red()),
-                area_validation,
-            );
-            area
-        } else {
-            area
-        };
         let block = super::block(self.title, self.actions).style(
             match (self.editing, &self.state.validation) {
                 (false, Some(Ok(_))) => style::Style::default().green(),
@@ -111,7 +91,15 @@ impl<'a> Input<'a> {
                 _ => style::Style::default(),
             },
         );
+        let block = if !self.editing
+            && let Some(Err(e)) = &self.state.validation
+        {
+            block.title_bottom(text::Line::raw(format!("\"{e}\"")).centered())
+        } else {
+            block
+        };
         frame.render_widget(widgets::Paragraph::new(view).block(block), area);
+
         if let Some(cursor) = cursor {
             frame.set_cursor_position(layout::Position::new(
                 area.x + 1 + cursor as u16,
