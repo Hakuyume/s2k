@@ -10,15 +10,14 @@ use crossterm::event;
 use futures::{FutureExt, StreamExt};
 use ratatui::layout;
 use std::cmp;
+use std::fs;
 use std::future;
 use std::io;
 use std::ops::ControlFlow;
 use std::path::PathBuf;
 use std::pin;
-use std::process::Stdio;
 use std::time::Duration;
 use strum::IntoEnumIterator;
-use tokio::io::AsyncWriteExt;
 use widgets::{Input, InputState, Output, OutputState, Select, SelectState};
 
 #[global_allocator]
@@ -27,8 +26,6 @@ static ALLOC: zeroizing_alloc::ZeroAlloc<std::alloc::System> =
 
 #[derive(Parser)]
 struct Args {
-    #[clap(long, num_args = 1..)]
-    export: Option<Vec<String>>,
     #[clap(long)]
     edit_hash: bool,
 }
@@ -45,7 +42,7 @@ async fn main() -> anyhow::Result<()> {
     let mut sleep = pin::pin!(None::<tokio::time::Sleep>);
 
     loop {
-        app.update().await?;
+        app.update()?;
 
         terminal.draw(|frame| app.render(frame))?;
 
@@ -103,7 +100,7 @@ bitflags::bitflags! {
         const HASH_EXPECTED_LOAD = 1 << 3;
         const ALGORITHM_EDIT = 1 << 4;
         const SALT_EDIT = 1 << 5;
-        const KEY_EXPORT = 1 << 6;
+        const KEY_COPY = 1 << 6;
     }
 }
 
@@ -116,7 +113,7 @@ enum Action {
     AlgorithmEdit,
     SaltEdit,
     KeyToggleMasked,
-    KeyExport,
+    KeyCopy,
 }
 
 impl App {
@@ -148,7 +145,7 @@ impl App {
         }
     }
 
-    async fn update(&mut self) -> anyhow::Result<()> {
+    fn update(&mut self) -> anyhow::Result<()> {
         if self.event.intersects(Event::PASSWORD_EDIT) {
             self.hash_actual.set_value(Some(
                 self.argon2
@@ -165,20 +162,19 @@ impl App {
         {
             let path = Data::path()?;
             if let Some(parent) = path.parent() {
-                tokio::fs::create_dir_all(parent).await?;
+                fs::create_dir_all(parent)?;
             }
-            tokio::fs::write(
+            fs::write(
                 path,
                 serde_json::to_string_pretty(&Data {
                     hash: value.to_owned(),
                 })?,
-            )
-            .await?;
+            )?;
         }
 
         if self.event.intersects(Event::HASH_EXPECTED_LOAD) {
             let path = Data::path()?;
-            match tokio::fs::read(path).await {
+            match fs::read(path) {
                 Ok(data) => {
                     let data = serde_json::from_slice::<Data>(&data)?;
                     self.hash_expected.set_value(data.hash);
@@ -224,28 +220,13 @@ impl App {
             }
         }
 
-        if self.event.intersects(Event::KEY_EXPORT)
-            && let Some([program, args @ ..]) = self.args.export.as_deref()
+        if self.event.intersects(Event::KEY_COPY)
             && let Some(value) = self.key.value()
         {
-            let mut child = tokio::process::Command::new(program)
-                .args(args)
-                .stdin(Stdio::piped())
-                .stdout(Stdio::piped())
-                .stderr(Stdio::piped())
-                .spawn()?;
-            let mut stdin = child.stdin.take().unwrap();
-
-            let (output, _) = tokio::time::timeout(
-                Duration::from_secs(1),
-                futures::future::try_join(child.wait_with_output(), async move {
-                    stdin.write_all(value.as_bytes()).await?;
-                    stdin.flush().await?;
-                    Ok(())
-                }),
-            )
-            .await??;
-            anyhow::ensure!(output.status.success(), "{output:?}");
+            crossterm_osc52::execute!(
+                io::stdout(),
+                crossterm_osc52::clipboard::CopyToClipboard::to_clipboard_from(value)
+            )?;
         }
 
         self.actions = Action::iter()
@@ -253,7 +234,7 @@ impl App {
                 Action::HashActualSave => self.args.edit_hash && self.hash_actual.value().is_some(),
                 Action::HashExpectedEdit | Action::HashExpectedLoad => self.args.edit_hash,
                 Action::KeyToggleMasked => self.key.value().is_some(),
-                Action::KeyExport => self.args.export.is_some() && self.key.value().is_some(),
+                Action::KeyCopy => self.key.value().is_some(),
                 _ => true,
             })
             .collect();
@@ -333,8 +314,8 @@ impl App {
                 self.key.set_masked(!self.key.masked());
                 ControlFlow::Continue(())
             }
-            (Action::KeyExport, _, crate::key!(ENTER)) => {
-                self.event |= Event::KEY_EXPORT;
+            (Action::KeyCopy, _, crate::key!(ENTER)) => {
+                self.event |= Event::KEY_COPY;
                 ControlFlow::Continue(())
             }
             _ => ControlFlow::Continue(()),
@@ -413,8 +394,8 @@ impl App {
                     }),
                 self.actions
                     .iter()
-                    .position(|action| matches!(action, Action::KeyExport))
-                    .map(|cursor| ("export", self.cursor == cursor)),
+                    .position(|action| matches!(action, Action::KeyCopy))
+                    .map(|cursor| ("copy", self.cursor == cursor)),
             ]
             .into_iter()
             .flatten();
