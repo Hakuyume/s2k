@@ -9,6 +9,7 @@ use clap::Parser;
 use crossterm::event;
 use futures::{FutureExt, StreamExt};
 use ratatui::layout;
+use std::cmp;
 use std::future;
 use std::io;
 use std::ops::ControlFlow;
@@ -16,6 +17,7 @@ use std::path::PathBuf;
 use std::pin;
 use std::process::Stdio;
 use std::time::Duration;
+use strum::IntoEnumIterator;
 use tokio::io::AsyncWriteExt;
 use widgets::{Input, InputState, Output, OutputState, Select, SelectState};
 
@@ -27,6 +29,8 @@ static ALLOC: zeroizing_alloc::ZeroAlloc<std::alloc::System> =
 struct Args {
     #[clap(long, num_args = 1..)]
     export: Option<Vec<String>>,
+    #[clap(long)]
+    edit_hash: bool,
 }
 
 #[tokio::main]
@@ -86,7 +90,8 @@ struct App {
 
     event: Event,
 
-    cursor: Cursor,
+    actions: Vec<Action>,
+    cursor: usize,
     editing: bool,
 }
 
@@ -102,8 +107,8 @@ bitflags::bitflags! {
     }
 }
 
-#[derive(Clone, Copy, strum::FromRepr)]
-enum Cursor {
+#[derive(strum::EnumIter)]
+enum Action {
     PasswordEdit,
     HashActualSave,
     HashExpectedEdit,
@@ -116,6 +121,14 @@ enum Cursor {
 
 impl App {
     fn new(args: Args) -> Self {
+        let mut event = Event::PASSWORD_EDIT
+            | Event::HASH_EXPECTED_EDIT
+            | Event::ALGORITHM_EDIT
+            | Event::SALT_EDIT;
+        if !args.edit_hash {
+            event |= Event::HASH_EXPECTED_LOAD;
+        }
+
         Self {
             args,
             argon2: Argon2::default(),
@@ -127,12 +140,10 @@ impl App {
             salt: InputState::default(),
             key: OutputState::default().with_masked(true),
 
-            event: Event::PASSWORD_EDIT
-                | Event::HASH_EXPECTED_EDIT
-                | Event::ALGORITHM_EDIT
-                | Event::SALT_EDIT,
+            event,
 
-            cursor: Cursor::PasswordEdit,
+            actions: Vec::new(),
+            cursor: 0,
             editing: false,
         }
     }
@@ -207,7 +218,10 @@ impl App {
                 Err(e) => Err(e)?,
             };
             self.salt.set_validation(Some(validation));
-            self.key.set_value(key);
+            self.key.set_value(key.as_ref());
+            if key.is_none() {
+                self.key.set_masked(true);
+            }
         }
 
         if self.event.intersects(Event::KEY_EXPORT)
@@ -234,12 +248,22 @@ impl App {
             anyhow::ensure!(output.status.success(), "{output:?}");
         }
 
+        self.actions = Action::iter()
+            .filter(|action| match action {
+                Action::HashActualSave => self.args.edit_hash && self.hash_actual.value().is_some(),
+                Action::HashExpectedEdit | Action::HashExpectedLoad => self.args.edit_hash,
+                Action::KeyToggleMasked => self.key.value().is_some(),
+                Action::KeyExport => self.args.export.is_some() && self.key.value().is_some(),
+                _ => true,
+            })
+            .collect();
+
         self.event.clear();
         Ok(())
     }
 
     fn handle(&mut self, event: event::Event) -> ControlFlow<()> {
-        match (self.cursor, self.editing, event) {
+        match (&self.actions[self.cursor], self.editing, event) {
             (
                 _,
                 _,
@@ -251,75 +275,65 @@ impl App {
                 }),
             ) => ControlFlow::Break(()),
             (_, false, crate::key!(UP) | crate::key!(LEFT)) => {
-                if let Some(c) = (self.cursor as usize)
-                    .checked_sub(1)
-                    .and_then(Cursor::from_repr)
-                {
-                    self.cursor = c;
-                }
+                self.cursor = self.cursor.saturating_sub(1);
                 ControlFlow::Continue(())
             }
             (_, false, crate::key!(DOWN) | crate::key!(RIGHT)) => {
-                if let Some(c) = (self.cursor as usize)
-                    .checked_add(1)
-                    .and_then(Cursor::from_repr)
-                {
-                    self.cursor = c;
-                }
+                self.cursor = cmp::min(self.cursor + 1, self.actions.len() - 1);
                 ControlFlow::Continue(())
             }
             (
-                Cursor::PasswordEdit
-                | Cursor::HashExpectedEdit
-                | Cursor::AlgorithmEdit
-                | Cursor::SaltEdit,
+                Action::PasswordEdit
+                | Action::HashExpectedEdit
+                | Action::AlgorithmEdit
+                | Action::SaltEdit,
                 false,
                 crate::key!(ENTER),
             ) => {
                 self.editing = true;
                 ControlFlow::Continue(())
             }
-            (Cursor::PasswordEdit, true, event) => {
+            (Action::PasswordEdit, true, event) => {
                 if self.password.handle(event).is_break() {
                     self.event |= Event::PASSWORD_EDIT;
                     self.editing = false;
                 }
                 ControlFlow::Continue(())
             }
-            (Cursor::HashActualSave, _, crate::key!(ENTER)) => {
+            (Action::HashActualSave, _, crate::key!(ENTER)) => {
                 self.event |= Event::HASH_ACTUAL_SAVE;
                 ControlFlow::Continue(())
             }
-            (Cursor::HashExpectedEdit, true, event) => {
+            (Action::HashExpectedEdit, true, event) => {
                 if self.hash_expected.handle(event).is_break() {
                     self.event |= Event::HASH_EXPECTED_EDIT;
                     self.editing = false;
                 }
                 ControlFlow::Continue(())
             }
-            (Cursor::HashExpectedLoad, _, crate::key!(ENTER)) => {
+            (Action::HashExpectedLoad, _, crate::key!(ENTER)) => {
                 self.event |= Event::HASH_EXPECTED_LOAD;
                 ControlFlow::Continue(())
             }
-            (Cursor::AlgorithmEdit, true, event) => {
+            (Action::AlgorithmEdit, true, event) => {
                 if self.algorithm.handle(event).is_break() {
                     self.event |= Event::ALGORITHM_EDIT;
                     self.editing = false;
                 }
                 ControlFlow::Continue(())
             }
-            (Cursor::SaltEdit, true, event) => {
+            (Action::SaltEdit, true, event) => {
                 if self.salt.handle(event).is_break() {
                     self.event |= Event::SALT_EDIT;
                     self.editing = false;
                 }
                 ControlFlow::Continue(())
             }
-            (Cursor::KeyToggleMasked, _, crate::key!(ENTER)) => {
+            (Action::KeyToggleMasked, _, crate::key!(ENTER)) => {
                 self.key.set_masked(!self.key.masked());
                 ControlFlow::Continue(())
             }
-            (Cursor::KeyExport, _, crate::key!(ENTER)) => {
+            (Action::KeyExport, _, crate::key!(ENTER)) => {
                 self.event |= Event::KEY_EXPORT;
                 ControlFlow::Continue(())
             }
@@ -329,42 +343,81 @@ impl App {
 
     fn render(&mut self, frame: &mut ratatui::Frame) {
         let password = Input::new(&mut self.password, "password")
-            .editing(matches!(self.cursor, Cursor::PasswordEdit) && self.editing)
-            .actions([(
-                "edit",
-                matches!(self.cursor, Cursor::PasswordEdit) && !self.editing,
-            )]);
-        let hash_actual = Output::new(&mut self.hash_actual, "hash (actual)")
-            .actions([("save", matches!(self.cursor, Cursor::HashActualSave))]);
+            .editing(matches!(self.actions[self.cursor], Action::PasswordEdit) && self.editing)
+            .actions(
+                [self
+                    .actions
+                    .iter()
+                    .position(|action| matches!(action, Action::PasswordEdit))
+                    .map(|cursor| ("edit", self.cursor == cursor && !self.editing))]
+                .into_iter()
+                .flatten(),
+            );
+        let hash_actual = Output::new(&mut self.hash_actual, "hash (actual)").actions(
+            [self
+                .actions
+                .iter()
+                .position(|action| matches!(action, Action::HashActualSave))
+                .map(|cursor| ("save", self.cursor == cursor))]
+            .into_iter()
+            .flatten(),
+        );
         let hash_expected = Input::new(&mut self.hash_expected, "hash (expected)")
-            .editing(matches!(self.cursor, Cursor::HashExpectedEdit) && self.editing)
-            .actions([
-                (
-                    "edit",
-                    matches!(self.cursor, Cursor::HashExpectedEdit) && !self.editing,
-                ),
-                ("load", matches!(self.cursor, Cursor::HashExpectedLoad)),
-            ]);
+            .editing(matches!(self.actions[self.cursor], Action::HashExpectedEdit) && self.editing)
+            .actions(
+                [
+                    self.actions
+                        .iter()
+                        .position(|action| matches!(action, Action::HashExpectedEdit))
+                        .map(|cursor| ("edit", self.cursor == cursor && !self.editing)),
+                    self.actions
+                        .iter()
+                        .position(|action| matches!(action, Action::HashExpectedLoad))
+                        .map(|cursor| ("load", self.cursor == cursor)),
+                ]
+                .into_iter()
+                .flatten(),
+            );
         let algorithm = Select::new(&mut self.algorithm, "algorithm")
-            .editing(matches!(self.cursor, Cursor::AlgorithmEdit) && self.editing)
-            .actions([(
-                "edit",
-                matches!(self.cursor, Cursor::AlgorithmEdit) && !self.editing,
-            )]);
+            .editing(matches!(self.actions[self.cursor], Action::AlgorithmEdit) && self.editing)
+            .actions(
+                [self
+                    .actions
+                    .iter()
+                    .position(|action| matches!(action, Action::AlgorithmEdit))
+                    .map(|cursor| ("edit", self.cursor == cursor && !self.editing))]
+                .into_iter()
+                .flatten(),
+            );
         let salt = Input::new(&mut self.salt, "salt")
-            .editing(matches!(self.cursor, Cursor::SaltEdit) && self.editing)
-            .actions([(
-                "edit",
-                matches!(self.cursor, Cursor::SaltEdit) && !self.editing,
-            )]);
+            .editing(matches!(self.actions[self.cursor], Action::SaltEdit) && self.editing)
+            .actions(
+                [self
+                    .actions
+                    .iter()
+                    .position(|action| matches!(action, Action::SaltEdit))
+                    .map(|cursor| ("edit", self.cursor == cursor && !self.editing))]
+                .into_iter()
+                .flatten(),
+            );
         let key = {
             let actions = [
-                (
-                    if self.key.masked() { "show" } else { "hide" },
-                    matches!(self.cursor, Cursor::KeyToggleMasked),
-                ),
-                ("export", matches!(self.cursor, Cursor::KeyExport)),
-            ];
+                self.actions
+                    .iter()
+                    .position(|action| matches!(action, Action::KeyToggleMasked))
+                    .map(|cursor| {
+                        (
+                            if self.key.masked() { "show" } else { "hide" },
+                            self.cursor == cursor,
+                        )
+                    }),
+                self.actions
+                    .iter()
+                    .position(|action| matches!(action, Action::KeyExport))
+                    .map(|cursor| ("export", self.cursor == cursor)),
+            ]
+            .into_iter()
+            .flatten();
             Output::new(&mut self.key, "key").actions(actions)
         };
 
