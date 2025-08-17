@@ -102,7 +102,7 @@ mod tests {
     #[test]
     fn test_encode() {
         assert_eq!(
-            super::encode(b"key", char::from(0x00)..=char::from(0xff), 6),
+            super::encode(b"key", (u8::MIN..=u8::MAX).map(char::from), 6),
             "\0\0\0key",
         );
 
