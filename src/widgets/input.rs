@@ -60,7 +60,7 @@ impl<'a> Input<'a> {
                     (index..=value.len()).filter_map(move |j| {
                         value
                             .is_char_boundary(j)
-                            .then_some((&value[i..j], value[i..index].width_cjk()))
+                            .then(|| (&value[i..j], value[i..index].width_cjk()))
                     })
                 })
                 .filter(|(view, cursor)| {
