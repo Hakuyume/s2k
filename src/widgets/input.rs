@@ -1,3 +1,4 @@
+use itertools::Itertools;
 use ratatui::crossterm::event;
 use ratatui::style::{self, Stylize};
 use ratatui::{layout, text, widgets};
@@ -53,18 +54,21 @@ impl<'a> Input<'a> {
                 .chars()
                 .map(|c| if self.state.masked { super::MASK } else { c }.len_utf8())
                 .sum::<usize>();
-            let (view, cursor) = (0..=index)
-                .filter(|i| value.is_char_boundary(*i))
-                .flat_map(|i| {
-                    let value = &value;
-                    (index..=value.len()).filter_map(move |j| {
-                        value
-                            .is_char_boundary(j)
-                            .then(|| (&value[i..j], value[i..index].width_cjk()))
-                    })
-                })
-                .filter(|(view, cursor)| {
-                    view.width_cjk() + 2 <= area.width as _ && *cursor + 2 < area.width as _
+            let (view, cursor) = value[..index]
+                .char_indices()
+                .map(|(i, _)| i)
+                .chain(iter::once(index))
+                .cartesian_product(
+                    value[index..]
+                        .char_indices()
+                        .map(|(j, _)| index + j)
+                        .chain(iter::once(value.len())),
+                )
+                .filter_map(|(i, j)| {
+                    let view = &value[i..j];
+                    let cursor = value[i..index].width_cjk();
+                    (view.width_cjk() + 2 <= area.width as _ && cursor + 2 < area.width as _)
+                        .then_some((view, cursor))
                 })
                 .min_by_key(|(view, cursor)| {
                     (
@@ -76,10 +80,15 @@ impl<'a> Input<'a> {
             self.state.cursor = cursor;
             (view, Some(cursor))
         } else {
-            let view = (0..=value.len())
+            let view = value
+                .char_indices()
+                .map(|(j, _)| j)
+                .chain(iter::once(value.len()))
                 .rev()
-                .filter_map(|j| value.is_char_boundary(j).then_some(&value[..j]))
-                .find(|view| view.width_cjk() + 2 <= area.width as _)
+                .find_map(|j| {
+                    let view = &value[..j];
+                    (view.width_cjk() + 2 <= area.width as _).then_some(view)
+                })
                 .unwrap();
             (view, None)
         };
