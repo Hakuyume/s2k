@@ -212,6 +212,12 @@ impl InputState {
                 }
                 ControlFlow::Continue(())
             }
+            crate::key!(DELETE) => {
+                if self.index < self.value.len() {
+                    self.value.remove(self.index);
+                }
+                ControlFlow::Continue(())
+            }
             _ => ControlFlow::Continue(()),
         }
     }

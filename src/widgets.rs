@@ -75,4 +75,7 @@ macro_rules! key {
     (BACKSPACE) => {
         $crate::key!(CONTROL('h')) | $crate::key!(__CODE(::crossterm::event::KeyCode::Backspace))
     };
+    (DELETE) => {
+        $crate::key!(CONTROL('d')) | $crate::key!(__CODE(::crossterm::event::KeyCode::Delete))
+    };
 }
