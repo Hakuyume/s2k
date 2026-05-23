@@ -4,8 +4,7 @@ mod select;
 
 pub use input::{Input, InputState};
 pub use output::{Output, OutputState};
-use ratatui::style::{self, Stylize};
-use ratatui::{text, widgets};
+use ratatui::{style, text, widgets};
 pub use select::{Select, SelectState};
 
 const MASK: char = '*';

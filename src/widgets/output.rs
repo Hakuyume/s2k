@@ -1,5 +1,4 @@
-use ratatui::style::{self, Stylize};
-use ratatui::{layout, widgets};
+use ratatui::{layout, style, widgets};
 use std::borrow::Cow;
 use std::iter;
 

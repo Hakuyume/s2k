@@ -1,7 +1,6 @@
 use itertools::Itertools;
 use ratatui::crossterm::event;
-use ratatui::style::{self, Stylize};
-use ratatui::{layout, text, widgets};
+use ratatui::{layout, style, text, widgets};
 use std::borrow::Cow;
 use std::fmt;
 use std::iter;

@@ -223,9 +223,9 @@ impl App {
         if self.event.intersects(Event::KEY_COPY)
             && let Some(value) = self.key.value()
         {
-            crossterm_osc52::execute!(
+            crossterm::execute!(
                 io::stdout(),
-                crossterm_osc52::clipboard::CopyToClipboard::to_clipboard_from(value)
+                crossterm::clipboard::CopyToClipboard::to_clipboard_from(value)
             )?;
         }
 

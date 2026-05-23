@@ -1,7 +1,5 @@
 use ratatui::crossterm::event;
-use ratatui::layout;
-use ratatui::style::{self, Stylize};
-use ratatui::widgets;
+use ratatui::{layout, style, widgets};
 use std::marker::PhantomData;
 use std::ops::ControlFlow;
 
